@@ -8,17 +8,15 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 
-// Explicitly configure CORS for Socket.IO
 const io = socketIo(server, {
   cors: {
-    origin: "*",  // Allow requests only from this origin
+    origin: "*", 
     methods: ["GET", "POST"],
     credentials: true
   }
 });
 
-// Enable CORS for Express (although Socket.IO will handle this)
-app.use(cors({ origin: '*' }));  // This might be redundant, but it shouldn't harm
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 
@@ -35,22 +33,11 @@ const whiteboardSchema = new mongoose.Schema({
 });
 const Whiteboard = mongoose.model('Whiteboard', whiteboardSchema);
 
-// Load Whiteboard Data
+// Get Whiteboard Data
 app.get('/getAllWhiteboardRooms', async (req, res) => {
   try {
     const session = await Whiteboard.find({}, { roomId: 1 });
     res.status(200).send(session ? session : []);
-  } catch (error) {
-    res.status(500).send({ error: 'Error loading whiteboard' });
-  }
-});
-
-// Load Whiteboard Data
-app.get('/getWhiteboard/:roomId', async (req, res) => {
-  const roomId = req.params.roomId;
-  try {
-    const session = await Whiteboard.findOne({ roomId });
-    res.status(200).send(session ? session.data : []);
   } catch (error) {
     res.status(500).send({ error: 'Error loading whiteboard' });
   }
@@ -68,11 +55,9 @@ io.on('connection', (socket) => {
       console.log(session);
 
       if (!session) {
-        // Create a new session if it doesn't exist
         session = new Whiteboard({ roomId, data: [] });
         await session.save();
       }
-      // Send existing (or empty) strokes to the joining user
       socket.emit('whiteboardData', { strokes: session.data });
 
     } catch (error) {
@@ -80,19 +65,18 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Error loading whiteboard' });
     }
   });
-  // Broadcast drawing data to the room when someone draws
+
   socket.on('draw', async (data) => {
     const { roomId, strokeData } = data;
 
-    // Broadcast drawing data to all users in the room
     socket.to(roomId).emit('draw', { strokeData });
     console.log(`Drawing broadcasted to room: ${roomId}`);
 
     try {
-      // Directly update MongoDB: Append new stroke to the `data` array
+
       await Whiteboard.findOneAndUpdate(
         { roomId },
-        { $push: { data: strokeData } }, // Add new stroke to existing data
+        { $push: { data: strokeData } },
         { upsert: true, new: true }
       );
 
@@ -102,7 +86,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Disconnect handling
   socket.on('disconnect', () => {
     console.log('Client disconnected');
   });
